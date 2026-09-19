@@ -1,8 +1,12 @@
-name: CI
+name: CI/CD
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -44,18 +48,52 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Run tests
         run: pytest
-        
+
+  build-and-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build Docker image
-        run: docker build -t  ghcr.io/${{ github.repository }}:latest .
+        run: docker build -t ghcr.io/${{ github.repository }}:latest .
 
       - name: Push Docker image
         run: docker push ghcr.io/${{ github.repository }}:latest
+  
+  
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-push
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
+      - name: Pull latest API image
+        run: |
+          cd /home/sfaha/fastapi-deployment
+          docker compose -f docker-compose.deploy.yml pull api
+      
+      - name: Deploy
+        run: |
+          cd /home/sfaha/fastapi-deployment
+          docker compose -f docker-compose.deploy.yml up -d --no-build
+
+      - name: Health check
+        run: |
+          curl -f http://localhost:8080/health
