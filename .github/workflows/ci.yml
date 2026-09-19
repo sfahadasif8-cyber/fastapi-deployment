@@ -55,4 +55,7 @@ jobs:
         run: pytest
         
       - name: Build Docker image
-        run: docker build -t fastapi-deployment:v1 .
+        run: docker build -t  ghcr.io/${{ github.repository }}:latest .
+
+      - name: Push Docker image
+        run: docker push ghcr.io/${{ github.repository }}:latest
