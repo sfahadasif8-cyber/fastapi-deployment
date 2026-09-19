@@ -96,4 +96,15 @@ jobs:
 
       - name: Health check
         run: |
-          curl -f http://localhost:8080/health
+          for i in {1..30}; do
+           if curl -f http://localhost:8080/health; then
+             echo "Health check passed"
+             exit 0
+           fi
+
+           echo "API not ready yet. Retrying..."
+           sleep 2
+          done
+
+          echo "Health check failed after 60 seconds"
+          exit 1
